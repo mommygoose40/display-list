@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>巡視紀錄列表</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f8ff;
+      padding: 16px;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .year-block, .month-block, .day-block {
+      border: 1px solid #d0d7e2;
+      border-radius: 8px;
+      background: white;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 12px 16px;
+      background: #e8eef8;
+      cursor: pointer;
+      font-size: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .content {
+      display: none;
+      padding: 0 16px 12px;
+    }
+
+    .record {
+      padding: 10px 0;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+      font-size: 18px;
+    }
+
+    .record:last-child {
+      border-bottom: none;
+    }
+  </style>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+
+<body>
+
+<h2>巡視紀錄列表</h2>
+
+<div id="listContainer">載入中...</div>
+
+<script>
+
+  const GAS_URL = "你的 List API 端點（之後我幫你做）";
+
+  let globalNickname = "";
+  let globalRole = "";   // 志工、大隊長、管理員
+  let globalTeam = "";   // 當前志工所屬大隊
+
+  /* ------------------------------------------
+      1. 初始化：登入 LIFF 並取得資料
+  -------------------------------------------*/
+  async function main() {
+
+    await liff.init({ liffId: "你的 liff ID" });
+
+    if (!liff.isLoggedIn()) {
+      liff.login();
+      return;
+    }
+
+    const profile = await liff.getProfile();
+    globalNickname = profile.displayName;
+
+    // step2 → 向 GAS 要 user 資料（權限/大隊等）
+    loadUserInfo(globalNickname);
+  }
+
+
+  /* ------------------------------------------
+      2. 讀取使用者權限 + 大隊等資訊
+  -------------------------------------------*/
+  function loadUserInfo(nickname) {
+
+    // ⚠ 這是你之後要實作的 API，我先寫假資料呈現
+    // 未來你要做一個 API 回傳：
+    // { role: "志工", team: "第一大隊" }
+
+    const fake = {
+      role: "志工",
+      team: "第一大隊"
+    };
+
+    globalRole = fake.role;
+    globalTeam = fake.team;
+
+    // 取得列表資料
+    loadRecordList();
+  }
+
+
+  /* ------------------------------------------
+      3. 從 GAS 取得回報記錄（未來串 API）
+  -------------------------------------------*/
+  function loadRecordList() {
+
+    // ⚠ 這裡還沒串 API，我先放一份假資料讓你看到畫面
+    const mockData = [
+      { id:"rpt01", date:"2025/01/03", title:"巡視正常", team:"第一大隊" },
+      { id:"rpt02", date:"2025/01/05", title:"水位偏高", team:"第一大隊" },
+      { id:"rpt03", date:"2025/02/10", title:"道路積水", team:"第三大隊" }
+    ];
+
+    renderList(mockData);
+  }
+
+
+  /* ------------------------------------------
+      4. 渲染「年度 → 月份 → 日期 → 紀錄」
+  -------------------------------------------*/
+  function renderList(list) {
+
+    const container = document.getElementById("listContainer");
+    container.innerHTML = "";
+
+    // 將資料依照 年 / 月 / 日 分組
+    const grouped = {};
+
+    list.forEach(item => {
+      const [y, m, d] = item.date.split("/");
+
+      if (!grouped[y]) grouped[y] = {};
+      if (!grouped[y][m]) grouped[y][m] = {};
+      if (!grouped[y][m][d]) grouped[y][m][d] = [];
+
+      grouped[y][m][d].push(item);
+    });
+
+    /* --- 建立畫面 --- */
+
+    Object.keys(grouped).sort().reverse().forEach(year => {
+
+      const yearBlock = createBlock(year + " 年", "year");
+
+      const yearContent = yearBlock.querySelector(".content");
+
+      Object.keys(grouped[year]).sort().forEach(month => {
+
+        const monthBlock = createBlock(month + " 月", "month");
+        const monthContent = monthBlock.querySelector(".content");
+
+        Object.keys(grouped[year][month]).sort().forEach(day => {
+
+          const dayBlock = createBlock(day + " 日", "day");
+          const dayContent = dayBlock.querySelector(".content");
+
+          grouped[year][month][day].forEach(record => {
+
+            const div = document.createElement("div");
+            div.className = "record";
+            div.textContent = record.title;
+
+            // 點擊紀錄 → 跳轉到 display.html
+            div.onclick = function () {
+              window.location.href = `display.html?rid=${record.id}`;
+            };
+
+            dayContent.appendChild(div);
+          });
+
+          monthContent.appendChild(dayBlock);
+        });
+
+        yearContent.appendChild(monthBlock);
+      });
+
+      container.appendChild(yearBlock);
+    });
+  }
+
+
+  /* ------------------------------------------
+      5. 工具：建立可收合區塊
+  -------------------------------------------*/
+  function createBlock(title, level) {
+    const block = document.createElement("div");
+    block.className = level + "-block";
+
+    const header = document.createElement("div");
+    header.className = "header";
+    header.textContent = title;
+
+    const content = document.createElement("div");
+    content.className = "content";
+
+    header.onclick = () => {
+      content.style.display = content.style.display === "none" ? "block" : "none";
+    };
+
+    block.appendChild(header);
+    block.appendChild(content);
+    return block;
+  }
+
+
+  main();
+</script>
+
+</body>
+</html>
