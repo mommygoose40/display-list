@@ -60,15 +60,6 @@
 .content {
   margin-top: 8px;
 }
-
-.status-dot {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background-color: #E53935; /* 紅色 */
-  margin-right: 6px;
-}
   </style>
 
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -347,25 +338,13 @@ function renderList(records) {
   const hh = String(rawDate.getHours()).padStart(2, "0");
   const mm = String(rawDate.getMinutes()).padStart(2, "0");
 
-  // 是否異常
-  const isAbnormal =
-    record.是否異常 === "異常" ||
-    record.異常 === "異常" ||
-    record.狀態 === "異常";
+  // 異常 / 正常
+  const status = record.是否異常 === "異常" || record.異常 === "異常"
+    ? "異常"
+    : "正常";
 
-  // === 紅點（只有異常時出現） ===
-  if (isAbnormal) {
-    const dot = document.createElement("span");
-    dot.className = "status-dot";
-    div.appendChild(dot);
-  }
+  div.textContent = `${hh}:${mm}｜${status}`;
 
-  // === 時間文字 ===
-  const text = document.createElement("span");
-  text.textContent = `${hh}:${mm}`;
-  div.appendChild(text);
-
-  // 點擊事件
   div.onclick = () => {
     window.location.href = record.詳細紀錄;
   };
