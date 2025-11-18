@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>防汛通報系統</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f8ff;
+      padding: 16px;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .year-block, .month-block, .day-block {
+      border: 1px solid #d0d7e2;
+      border-radius: 8px;
+      background: white;
+      margin-bottom: 4px;
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 12px 16px;
+      background: #e8eef8;
+      cursor: pointer;
+      font-size: 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .toggle-icon svg {
+  width: 26px;
+  height: 26px;
+  color: #333;
+}
+
+/* 展開後 header 的下方要留距離 */
+.header + .content {
+  margin-top: 4px;
+}
+
+    .content {
+      display: none;
+      padding: 0 16px 12px;
+    }
+
+    .record {
+  display: flex;
+  align-items: center;
+  font-size: 18px;
+  padding: 10px 0;
+  border-bottom: 1px solid #eee;
+  gap: 6px;
+  cursor: pointer;
+}
+
+    .record:last-child {
+      border-bottom: none;
+    }
+
+    /* 讓所有區塊之間保持距離 */
+.year-block, .month-block, .day-block {
+  margin-bottom: 14px;
+}
+
+/* 讓展開的內容不會緊貼 header */
+.content {
+  margin-top: 6px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #E53935;
+}
+
+/* === 修正展開後的區塊間距 === */
+/* 展開後的外框保留較大空隙 */
+.block-open {
+  margin-bottom: 12px !important;
+}
+
+/* 讓展開後的 content 有內距，避免黏住 */
+.year-block > .content,
+.month-block > .content,
+.day-block > .content {
+  padding-top: 10px;
+}
+
+/* 日期展開後的紀錄字體加大 */
+.day-block .record {
+  font-size: 20px;   /* 你可改成 20 / 24 */
+}
+
+/* 本月無巡視紀錄 字體與一般紀錄一致 */
+.month-block .record {
+  font-size: 20px;
+}
+
+#loadingMask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  font-size: 28px;
+  color: white;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #eee;
+  border-top: 4px solid #0b5ed7;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 14px;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.loadingText {
+  display: none;
+}
+
+#listContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+}
+
+#switchArea {
+  display: flex;
+  justify-content: space-between;  /* 左右排列 */
+  text-align: center;
+  margin-top:10px;
+  margin-bottom:18px;
+}
+
+#adminFilterArea select {
+  font-size: 20px;
+  padding: 6px;
+}
+#adminFilterArea label {
+  font-size: 20px;
+}
+  </style>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+
+<body>
+
+<!--
+    <div id="debug" style="white-space: pre-line; font-size:14px; color:#c00; margin-bottom:16px;"></div>
+-->
+
+<div id="loadingMask">
+  <div class="spinner"></div>
+
+  <div id="text-loading" class="loadingText">載入中…</div>
+  <div id="text-update" class="loadingText">資料更新中，請耐心等候…</div>
+  <div id="text-init" class="loadingText">資料初始化中，請耐心等候…</div>
+
+  <!-- 錯誤訊息預留（可選） -->
+  <div id="text-error" class="loadingText">無法連線到資料來源</div>
+  <div id="text-error-format" class="loadingText">資料格式錯誤，請聯絡管理員</div>
+  <div id="text-error-notfound" class="loadingText">找不到您的志工資料</div>
+</div>
+
+<h2 id="pageTitle" style="display:none;">回報紀錄</h2>
+
+<div id="switchArea" style="
+  display:none;
+  text-align:center;
+  margin-top:10px;
+  margin-bottom:18px;
+">
+  <button id="btnTeam" style="
+  padding:6px 16px;
+  font-size:22px;
+  border:2px solid #0b5ed7;
+  background:#0b5ed7;
+  color:white;
+  border-radius:6px;
+  margin-right:6px;
+">大隊紀錄</button>
+
+<button id="btnSelf" style="
+  padding:6px 16px;
+  font-size:22px;
+  border:2px solid #0b5ed7;
+  background:white;
+  color:#0b5ed7;
+  border-radius:6px;
+">我的紀錄</button>
+</div>
+
+<div id="adminFilterArea" style="display:none; padding:12px;">
+
+  <!-- 大隊 -->
+  <div style="margin-bottom:12px;">
+    <label>大隊：</label>
+    <select id="adminTeamSelect">
+      <option value="全部">全部</option>
+      <option value="1">第1大隊</option>
+      <option value="2">第2大隊</option>
+      <option value="3">第3大隊</option>
+      <option value="4">第4大隊</option>
+      <option value="5">第5大隊</option>
+      <option value="6">第6大隊</option>
+      <option value="7">第7大隊</option>
+      <option value="8">第8大隊</option>
+      <option value="9">第9大隊</option>
+      <option value="10">第10大隊</option>
+    </select>
+  </div>
+
+  <!-- 範圍 -->
+  <div style="margin-bottom:12px;">
+    <label>範圍：</label>
+    <select id="adminDayRange">
+      <option value="3">最近 3 天</option>
+      <option value="7">最近 7 天</option>
+      <option value="14" selected>最近 14 天</option>
+    </select>
+  </div>
+
+  <!-- 時間 -->
+  <div style="margin-bottom:12px;">
+    <label>時間：</label>
+    <select id="adminTimeSelect">
+      <option value="全部">全部時段</option>
+      <option value="上午">上午（00:00–11:59）</option>
+      <option value="下午">下午（12:00–17:59）</option>
+      <option value="晚上">晚上（18:00–23:59）</option>
+    </select>
+  </div>
+
+  <!-- 通報類型 -->
+  <div style="margin-bottom:12px;">
+    <label>類型：</label>
+    <select id="adminTypeSelect">
+      <option value="全部">全部</option>
+      <option value="平時">平時</option>
+      <option value="災中">災中</option>
+      <option value="其他">其他</option>
+    </select>
+  </div>
+
+  <button id="adminSearchBtn" style="
+    margin-top:10px;
+    padding:10px;
+    font-size:22px;
+    background:#0b5ed7;
+    border:2px solid #0b5ed7;
+    color:white;
+    border-radius:6px;
+    width:100%;
+  ">搜尋</button>
+
+</div>
+
+<div id="centerSpinner" style="
+  display:none;
+  width:100%;
+  padding:40px 0;
+  justify-content:center;
+  align-items:center;
+  flex-direction:column;
+">
+  <div class="spinner"></div>
+  <div style="font-size:22px; color:#666; margin-top:10px;">載入中...</div>
+</div>
+
+<!-- 清單真正呈現的地方，一開始先隱藏 -->
+<div id="listContainer" style="display: none;"></div>
+
+<script>
+
+  const VOLUNTEER_API_URL = "https://script.google.com/macros/s/AKfycbxiGSG5hSMO6We-C6cyEJZLgf4Rnbjp-6w9Tmb0qfF9VM6JB4YGEMqj3QRfTzg7Czpc/exec"; 
+const REPORT_GAS_URL = "https://script.google.com/macros/s/AKfycbxOWIHS04mtcTRdJNvnWnGOwBnlGPwG3tQOU0qgN5feabS7hbRrIM4bU1_T8VrXaA1-8g/exec";
+
+let globalAdminRecords = [];   // 管理員一次抓全部後存在這邊
+let adminViewDays = 14;        // 預設抓最近兩週，可改 30
+let globalNickname = "";
+let globalRole = "";
+let globalTeam = "";
+let globalName = "";  // ★ 必須補這行
+let viewMode = "team";  // self = 看自己, team = 看大隊
+
+function debug(msg) {
+  try {
+    const box = document.getElementById("debug");
+    if (box) box.textContent += msg + "\n";
+  } catch (e) {}
+}
+
+  /* ------------------------------------------
+      1. 初始化：登入 LIFF 並取得資料
+  -------------------------------------------*/
+  async function main() {
+  // 隱藏按鈕直到資料加載完成
+  document.getElementById("switchArea").style.display = "none"; 
+
+  await liff.init({ liffId: "2007934728-jZkMLlPO" });
+
+  if (!liff.isLoggedIn()) {
+    liff.login();
+    return;
+  }
+
+  const profile = await liff.getProfile();
+  globalNickname = profile.displayName;
+
+  // 進一步獲取用戶資訊
+  loadUserInfo(globalNickname);
+}
+
+  /* ------------------------------------------
+      2. 讀取使用者權限 + 大隊等資訊
+  -------------------------------------------*/
+  async function loadUserInfo(nickname) {
+  debug("STEP1: 開始取得志工資料，nickname=" + nickname);
+
+  // 檢查舊快取（沒 role → 自動作廢）
+  const oldCache = localStorage.getItem("userInfoCache");
+  if (oldCache) {
+    const parsedOld = JSON.parse(oldCache);
+    if (!parsedOld.role) {
+      debug("偵測到舊快取（缺少 role），已自動刪除");
+      localStorage.removeItem("userInfoCache");
+    }
+  }
+
+  const mask = document.getElementById("loadingMask");
+  const tLoad = document.getElementById("text-loading");
+  const tUpdate = document.getElementById("text-update");
+  const tInit = document.getElementById("text-init");
+
+  // 先隱藏所有載入中的畫面
+  tLoad.style.display = "none";
+  tUpdate.style.display = "none";
+  tInit.style.display = "none";
+
+  // 顯示大載入遮罩
+  mask.style.display = "flex";
+
+  const cache = localStorage.getItem("userInfoCache");
+  const now = Date.now();
+  const expires = 10 * 1000; // 測試過期時間：5 秒
+  //const expires = 180 * 24 * 60 * 60 * 1000; // 正式用 180 天
+
+  if (cache) {
+    const parsed = JSON.parse(cache);
+
+    debug("當前快取：" + cache);
+
+    if (now - parsed.timestamp < expires) {
+      tLoad.style.display = "block";  // 顯示載入中
+
+      // 設定全域變數
+      globalRole = parsed.role;
+      globalTeam = parsed.team;
+      globalName = parsed.name;
+
+      // 預設載入大隊紀錄
+      loadRecordList("team");   
+      return;
+    }
+
+    // 快取過期，顯示資料更新中
+    tUpdate.style.display = "block";  
+
+  } else {
+    // 沒有快取，顯示資料初始化中
+    tInit.style.display = "block";  
+  }
+
+  // 呼叫 API 獲取資料
+  const url = `${VOLUNTEER_API_URL}?action=query&nickname=${nickname}`;
+  debug("STEP1-API 呼叫：" + url);
+
+  let res, text;
+
+  try {
+    res = await fetch(url);
+    text = await res.text();
+  } catch (err) {
+    document.getElementById("text-error").style.display = "block";
+    return;
+  }
+
+  if (text.startsWith("callback")) {
+    text = text.replace(/^callback\(/, "").replace(/\);$/, "");
+  }
+
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch (err) {
+    document.getElementById("text-error-format").style.display = "block";
+    return;
+  }
+
+  if (!json.success) {
+    document.getElementById("text-error-notfound").style.display = "block";
+    return;
+  }
+
+  // 更新快取
+  globalName = json.data.姓名;
+  globalTeam = json.data.大隊;
+  globalRole = json.data.權限 || "志工";
+
+  debug("儲存的權限：" + globalRole);
+
+  localStorage.setItem("userInfoCache", JSON.stringify({
+    name: globalName,
+    team: globalTeam,
+    role: globalRole,
+    timestamp: Date.now()
+  }));
+
+  // ⭐ 如果使用者是管理員 → 顯示 admin 按鈕
+if (globalRole === "管理員") {
+  document.getElementById("btnAdmin").style.display = "inline-block";
+}
+
+  // 預設載入大隊紀錄
+  loadRecordList("team");
+}
+
+  /* ------------------------------------------
+      3. 從 GAS 取得回報記錄（未來串 API）
+  -------------------------------------------*/
+  async function loadRecordList(mode = "self") {
+  let url = "";
+
+  // 我的紀錄 → 只用自己的名字篩選
+  if (mode === "self") {
+    url = `${REPORT_GAS_URL}?action=listMyReports&nickname=${globalNickname}`;
+  }
+
+  // 大隊紀錄 → 讀取整個大隊的紀錄
+  else if (mode === "team") {
+    url = `${REPORT_GAS_URL}?action=listTeamReports&nickname=${globalNickname}`;
+  }
+
+  // 管理員：一次取 14 / 30 天資料
+else if (mode === "admin") {
+  url = `${REPORT_GAS_URL}?action=listAdminFull&days=${adminViewDays}`;
+}
+
+  debug("STEP2: 開始取得巡視紀錄：" + url);
+
+  let res, text;
+
+  try {
+    res = await fetch(url);
+    text = await res.text();
+  } catch (err) {
+    debug("STEP2-連線失敗：" + err);
+    document.getElementById("listContainer").innerHTML = "巡視紀錄載入失敗（連線錯誤）";
+    return;
+  }
+
+  if (text.startsWith("callback")) {
+    text = text.replace(/^callback\(/, "").replace(/\);$/, "");
+  }
+
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch (err) {
+    debug("STEP2-JSON 解析失敗：" + err + "\n原始：" + text);
+    document.getElementById("listContainer").innerHTML = "巡視紀錄格式錯誤，請聯絡管理員";
+    return;
+  }
+
+  if (!json.success) {
+    debug("STEP2-巡視紀錄載入失敗：" + JSON.stringify(json));
+    document.getElementById("listContainer").innerHTML = "無法取得巡視紀錄";
+    return;
+  }
+
+  const list = json.records || [];
+  debug("STEP2-成功取得紀錄數量（mode=" + mode + "）：" + list.length);
+
+  // ★ 記錄目前的資料，切換按鈕時用
+  globalRecords = list;
+  renderList(list);  // 將列表渲染出來
+  updateSwitchUI();   // 更新切換按鈕UI（資料回來後才做，避免畫面跳兩次）
+}
+
+  /* ------------------------------------------
+      4. 渲染「年度 → 月份 → 日期 → 紀錄」
+  -------------------------------------------*/
+  function normalizeDate(dateStr) {
+  // 若是 ISO 格式：2025-11-11T16:00:00.000Z
+  if (dateStr.includes("T")) {
+    const d = new Date(dateStr);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}/${mm}/${dd}`;
+  }
+  return dateStr; // 若本來就是 yyyy/mm/dd
+}
+
+function filterAdminRecords() {
+
+  let records = [...globalAdminRecords]; // 複製原始資料
+
+  // 篩選大隊
+  let targetTeam = document.getElementById("adminTeamSelect")?.value || "全部";
+  if (targetTeam !== "全部") {
+    records = records.filter(r => (r.所屬大隊 + "") === targetTeam);
+  }
+
+  // 3. 篩選通報類型
+let targetType = document.getElementById("adminTypeSelect")?.value || "全部";
+if (targetType !== "全部") {
+  records = records.filter(r => {
+    const type = (r.通報類型 || "").trim();
+    return type === targetType;
+  });
+}
+
+// 4. 時段篩選
+let targetTime = document.getElementById("adminTimeSelect")?.value || "全部";
+
+if (targetTime !== "全部") {
+  records = records.filter(r => {
+    // 從 詳細紀錄 的 report_123456789 取 timestamp
+    const link = r.詳細紀錄 || "";
+const match = link.match(/report_(\d+)/);
+if (!match) return false;
+
+    const t = parseInt(match[1], 10);
+    const d = new Date(t);
+    const hour = d.getHours();
+
+    if (targetTime === "上午") return hour >= 0 && hour < 12;
+    if (targetTime === "下午") return hour >= 12 && hour < 18;
+    if (targetTime === "晚上") return hour >= 18 && hour < 24;
+
+    return true;
+  });
+}
+
+  // 篩選日期（最近 adminViewDays）
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - adminViewDays * 24 * 60 * 60 * 1000);
+
+  records = records.filter(r => {
+    let ds = normalizeDate(r.日期);
+    return new Date(ds) >= cutoff;
+  });
+
+  return records;
+}
+
+function renderList(records) {
+  const container = document.getElementById("listContainer");
+  const spinner = document.getElementById("centerSpinner");
+  const mask = document.getElementById("loadingMask");
+
+   // ⭐⭐⭐ 把「管理員前端快篩」貼在這裡 ⭐⭐⭐
+  // 管理員前端快篩：依大隊、日期過濾
+  if (globalRole === "管理員" && viewMode === "admin") {
+
+    // 1. 篩選大隊
+    let targetTeam = document.getElementById("adminTeamSelect")?.value || "全部";
+    if (targetTeam !== "全部") {
+      records = records.filter(r => (r.所屬大隊 + "") === targetTeam);
+    }
+
+    // 2. 篩選日期（最近 n 天）
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - adminViewDays * 24 * 60 * 60 * 1000);
+
+    records = records.filter(r => {
+      let ds = normalizeDate(r.日期);
+      return new Date(ds) >= cutoff;
+    });
+  }
+  // ⭐⭐⭐ 管理員快篩貼到這裡結束 ⭐⭐⭐
+
+  // 載入前的處理，避免兩個載入中動畫重複顯示
+  if (mask.style.display !== "none") {
+    // 如果是初始化載入，隱藏列表與 spinner
+    container.style.display = "none";
+    spinner.style.display = "none";  // 隱藏 centerSpinner
+    document.getElementById("pageTitle").style.display = "block";  // 顯示回報紀錄標題
+  } else {
+    // 在資料切換模式時，顯示 centerSpinner
+    spinner.style.display = "flex";
+    container.style.display = "none"; // 隱藏列表
+  }
+
+  let finalRecords = records;
+
+  // 我的紀錄 → 只顯示回報者為自己的紀錄
+  if (viewMode === "self") {
+    finalRecords = records.filter(r => {
+      return (r.回報者 || "").trim() === globalName;
+    });
+  }
+
+  globalRecords = records;  // 讓切換模式能重新渲染
+
+  debug("STEP3: 進入 renderList，顯示筆數=" + finalRecords.length);
+
+  container.innerHTML = "";
+
+  // 取得現在的年份與月份（民國）
+  const now = new Date();
+  const currentYear = now.getFullYear() - 1911;
+  const currentMonth = now.getMonth() + 1;
+
+  // --- step 1：把 records 按 月 / 日 分組 ---
+  const grouped = {};
+  for (let m = 1; m <= 12; m++) grouped[m] = {};
+
+  finalRecords.forEach(r => {
+    const normalized = normalizeDate(r.日期);
+    debug("STEP3-日期修正：" + r.日期 + " → " + normalized);
+
+    const dateParts = normalized.split("/");
+    const m = parseInt(dateParts[1], 10);
+    const d = parseInt(dateParts[2], 10);
+
+    if (!grouped[m][d]) grouped[m][d] = [];
+    grouped[m][d].push(r);
+  });
+
+  debug("STEP3-1: 日期分組完成");
+
+  // --- step 2：建立年份區塊 ---
+  const yearBlock = createBlock(`${currentYear} 年`, "year");
+  const yearContent = yearBlock.querySelector(".content");
+
+  // --- step 3：取出有效月份 ---
+  const months = Object.keys(grouped)
+    .map(m => parseInt(m, 10))
+    .filter(m => Object.keys(grouped[m]).length > 0)
+    .filter(m => m <= currentMonth)
+    .sort((a, b) => b - a);
+
+  debug("STEP3-2 顯示月份排列 = " + months.join(", "));
+
+  // --- step 4：逐月渲染 ---
+  months.forEach(month => {
+    const monthBlock = createBlock(`${month} 月`, "month");
+    const monthContent = monthBlock.querySelector(".content");
+
+    const days = Object.keys(grouped[month]).sort((a, b) => b - a);
+
+    if (days.length === 0) {
+      const emptyDiv = document.createElement("div");
+      emptyDiv.className = "record";
+      emptyDiv.textContent = "本月無巡視紀錄";
+      monthContent.appendChild(emptyDiv);
+    } else {
+      days.forEach(day => {
+        const dayBlock = createBlock(`${day} 日`, "day");
+        const dayContent = dayBlock.querySelector(".content");
+
+        grouped[month][day].forEach(record => {
+          const div = document.createElement("div");
+          div.className = "record";
+
+          // 時間解析
+          let hh = "--", mm = "--";
+          let ampm = "";
+
+          try {
+            const match = record.詳細紀錄.match(/report_(\d+)/);
+            if (match) {
+              const t = parseInt(match[1], 10);
+              const dateObj = new Date(t);
+
+              const hours = dateObj.getHours();
+              hh = String(hours).padStart(2, "0");
+              mm = String(dateObj.getMinutes()).padStart(2, "0");
+              ampm = "";
+            }
+          } catch (e) {
+            console.warn("無法解析時間：", record.詳細紀錄);
+          }
+
+          const status = (record.狀態 || "").trim();
+          const isAbnormal = status === "異常";
+
+          const timeText = document.createElement("span");
+          timeText.textContent = `${hh}:${mm}｜${status}`;
+          div.appendChild(timeText);
+
+          if (viewMode === "team") {
+            const nameSpan = document.createElement("span");
+            nameSpan.textContent = `｜${record.回報者}`;
+            div.appendChild(nameSpan);
+          }
+
+          if (isAbnormal) {
+            const dot = document.createElement("span");
+            dot.className = "status-dot";
+            div.appendChild(dot);
+          }
+
+          div.onclick = () => {
+            window.location.href = record.詳細紀錄;
+          };
+
+          dayContent.appendChild(div);
+        });
+
+        monthContent.appendChild(dayBlock);
+      });
+    }
+
+    yearContent.appendChild(monthBlock);
+  });
+
+  container.appendChild(yearBlock);
+
+  // --- 渲染完成 ---
+  document.getElementById("loadingMask").style.display = "none"; // 隱藏 loadingMask
+  container.style.display = "block"; // 顯示列表
+
+  if (spinner) spinner.style.display = "none"; // 隱藏 spinner
+
+  // 大隊長 / 管理員 → 顯示切換按鈕
+  if (globalRole === "大隊長" || globalRole === "管理員") {
+    document.getElementById("switchArea").style.display = "block";
+  }
+
+  debug("STEP3 完成：列表渲染成功");
+}
+
+  /* ------------------------------------------
+      5. 工具：建立可收合區塊
+  -------------------------------------------*/
+  function createBlock(title, level) {
+  const block = document.createElement("div");
+  block.className = level + "-block";
+
+  const header = document.createElement("div");
+  header.className = "header";
+
+  const titleSpan = document.createElement("span");
+  titleSpan.textContent = title;
+
+  // ▼（預設收起用）
+  const icon = document.createElement("span");
+  icon.className = "toggle-icon";
+  icon.innerHTML = `
+  <svg width="40" height="40" viewBox="0 0 24 24">
+    <path fill="#666" d="M5 8l7 8 7-8z"/>
+  </svg>
+`;
+
+  const content = document.createElement("div");
+  content.className = "content";
+  content.style.display = "none";
+
+  header.appendChild(titleSpan);
+  header.appendChild(icon);
+
+  header.onclick = () => {
+  const willOpen = content.style.display !== "block";
+
+  content.style.display = willOpen ? "block" : "none";
+
+  icon.innerHTML = willOpen
+    ? `<svg width="40" height="40" viewBox="0 0 24 24">
+         <path fill="#666" d="M5 16l7-8 7 8z"/>  <!-- 向上 -->
+       </svg>`
+    : `<svg width="40" height="40" viewBox="0 0 24 24">
+         <path fill="#666" d="M5 8l7 8 7-8z"/>  <!-- 向下 -->
+       </svg>`;
+};
+
+  block.appendChild(header);
+  block.appendChild(content);
+
+  return block;
+}
+
+document.getElementById("btnSelf").onclick = function () {
+  if (viewMode === "self") return;
+
+  viewMode = "self";
+  renderLoadingInList();      // ★ 新增：列表位置顯示 spinner
+  loadRecordList("self");
+};
+
+document.getElementById("btnTeam").onclick = async function () {
+
+  // 大隊長版本 → 維持現況
+  if (globalRole === "大隊長") {
+    viewMode = "team";
+    document.getElementById("adminFilterArea").style.display = "none";
+    renderLoadingInList();
+    loadRecordList("team");   // ⭐ 大隊長讀自己的大隊
+    return;
+  }
+
+  // 管理員版本 → 新的大隊紀錄（統一讀全部）
+  if (globalRole === "管理員") {
+
+    viewMode = "admin";  // ⭐ 進入 Admin 模式
+    renderLoadingInList();
+
+    // ⭐ 管理員第一次才撈 GAS（避免反覆 loading）
+    if (globalAdminRecords.length === 0) {
+      const url = `${REPORT_GAS_URL}?action=listAdminFull&days=${adminViewDays}`;
+      const res = await fetch(url);
+      const text = await res.text();
+      const json = JSON.parse(text);
+      globalAdminRecords = json.records || [];
+    }
+
+    // ⭐ 顯示管理員篩選區
+    document.getElementById("adminFilterArea").style.display = "block";
+
+    // ⭐ 依目前篩選條件前端快篩（不再叫 GAS）
+    const filtered = filterAdminRecords();
+    renderList(filtered);
+  }
+};
+
+document.getElementById("btnAdmin").onclick = async function () {
+
+  if (viewMode === "admin") return;
+
+  viewMode = "admin";
+  renderLoadingInList();
+
+  // 第一次才需要抓
+  if (globalAdminRecords.length === 0) {
+    const url = `${REPORT_GAS_URL}?action=listAdminFull&days=${adminViewDays}`;
+    const res = await fetch(url);
+    const text = await res.text();
+    const json = JSON.parse(text);
+    globalAdminRecords = json.records || [];
+  }
+
+  document.getElementById("adminFilterArea").style.display = "block";
+
+  renderList(globalAdminRecords);
+};
+
+document.getElementById("adminSearchBtn").onclick = () => {
+
+  if (viewMode !== "admin") return;  // 確認在 admin 模式下才動
+
+  // 更新天數（14 / 30）
+  adminViewDays = Number(document.getElementById("adminDayRange").value);
+
+  // 用管理員原始資料重新快篩
+  const filtered = filterAdminRecords();
+
+  // 渲染
+  renderList(filtered);
+};
+
+// 按鈕視覺切換
+function updateSwitchUI() {
+  const btnSelf = document.getElementById("btnSelf");
+  const btnTeam = document.getElementById("btnTeam");
+
+  if (viewMode === "self") {
+    btnSelf.style.background = "#0b5ed7";
+    btnSelf.style.color = "white";
+    btnTeam.style.background = "white";
+    btnTeam.style.color = "#0b5ed7";
+  } else {
+    btnTeam.style.background = "#0b5ed7";
+    btnTeam.style.color = "white";
+    btnSelf.style.background = "white";
+    btnSelf.style.color = "#0b5ed7";
+  }
+}
+
+function showLoadingMask() {
+  document.getElementById("loadingMask").style.display = "flex";
+}
+
+function renderLoadingInList() {
+  const container = document.getElementById("listContainer");
+  const spinner = document.getElementById("centerSpinner");
+
+  container.style.display = "none";
+  spinner.style.display = "flex";
+
+  // 不要顯示大遮罩
+  document.getElementById("loadingMask").style.display = "none";
+}
+
+  main();
+</script>
+
+</body>
+</html>
