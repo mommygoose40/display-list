@@ -434,9 +434,7 @@ function debug(msg) {
   /* ------------------------------------------
       2. 讀取使用者權限 + 大隊等資訊
   -------------------------------------------*/
-  let isInitialLoad = true;   // ★ 用來判斷第一次載入（避免以 UI 狀態判斷）
-
-async function loadUserInfo(nickname) {
+  async function loadUserInfo(nickname) {
   debug("STEP1: 開始取得志工資料，nickname=" + nickname);
 
   const mask = document.getElementById("loadingMask");
@@ -444,34 +442,33 @@ async function loadUserInfo(nickname) {
   const tUpdate = document.getElementById("text-update");
   const tInit = document.getElementById("text-init");
 
-  // 一律先隱藏所有文字
+  // 先全部隱藏
   tLoad.style.display = "none";
   tUpdate.style.display = "none";
   tInit.style.display = "none";
+  mask.style.display = "none";
 
   const cache = localStorage.getItem("userInfoCache");
   const now = Date.now();
   const expires = 10 * 1000;
 
-  /* -------------------------
-     ① 有效快取 → 只顯示「載入中」
-     ------------------------- */
+  // 快取有效時顯示"載入中..."
   if (cache) {
     const parsed = JSON.parse(cache);
-
     if (now - parsed.timestamp < expires) {
+      // 顯示載入中...
       mask.style.display = "flex";
-      tLoad.style.display = "block";     // 顯示載入中
+      tLoad.style.display = "block";
 
       globalRole = parsed.role;
       globalTeam = parsed.team;
       globalName = parsed.name;
 
-      isInitialLoad = false; // ★ 禁止 renderList 再判斷 UI
-
+      // ★★★ 修正：快取載入時也要處理管理員模式 ★★★
       if (globalRole === "管理員") {
         viewMode = "admin";
-        loadAdminRecords();
+        document.getElementById("adminFilterArea").style.display = "block";
+        loadAdminRecords(); // 載入管理員資料
       } else {
         loadRecordList("team");
       }
@@ -479,27 +476,25 @@ async function loadUserInfo(nickname) {
     }
   }
 
-  /* -------------------------
-     ② 無快取 → 顯示「初始化」
-     ③ 有快取但過期 → 顯示「更新中」
-     ------------------------- */
+  // 沒有快取或快取過期
   mask.style.display = "flex";
-
   if (!cache) {
-    tInit.style.display = "block";
-  } else {
-    tUpdate.style.display = "block";
-  }
+  tInit.style.display = "block";
+  tLoad.style.display = "none";   // 不要出現載入中
+} else {
+  tUpdate.style.display = "block";
+  tLoad.style.display = "none";   // 不要出現載入中
+}
 
-  /* -------------------------
-     呼叫 API（補快取）
-     ------------------------- */
+  // 呼叫 API
   const url = `${VOLUNTEER_API_URL}?action=query&nickname=${nickname}`;
+  debug("STEP1-API 呼叫：" + url);
+
   let res, text;
   try {
     res = await fetch(url);
     text = await res.text();
-  } catch {
+  } catch (err) {
     document.getElementById("text-error").style.display = "block";
     return;
   }
@@ -511,7 +506,7 @@ async function loadUserInfo(nickname) {
   let json;
   try {
     json = JSON.parse(text);
-  } catch {
+  } catch (err) {
     document.getElementById("text-error-format").style.display = "block";
     return;
   }
@@ -521,7 +516,7 @@ async function loadUserInfo(nickname) {
     return;
   }
 
-  // 存入快取
+  // 存快取
   globalName = json.data.姓名;
   globalTeam = json.data.大隊;
   globalRole = json.data.權限 || "志工";
@@ -533,10 +528,10 @@ async function loadUserInfo(nickname) {
     timestamp: Date.now()
   }));
 
-  isInitialLoad = false;
-
+  // ★★★★★ 區塊 2：API 載入後也要分權限 ★★★★★
   if (globalRole === "管理員") {
     viewMode = "admin";
+    document.getElementById("adminFilterArea").style.display = "block";
     loadAdminRecords();
   } else {
     loadRecordList("team");
@@ -602,7 +597,7 @@ async function loadAdminRecords() {
   debug("STEP2: 開始取得巡視紀錄：" + url);
 
   // 只有在切換模式時才顯示載入中，第一次載入不顯示
-  const isFirstLoad = isInitialLoad;
+  const isFirstLoad = document.getElementById("loadingMask").style.display === "flex";
   
   if (!isFirstLoad) {
     renderLoadingInList();
