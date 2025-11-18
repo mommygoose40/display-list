@@ -541,12 +541,9 @@ async function loadAdminRecords() {
   const tLoad = document.getElementById("text-loading");
   
   try {
-    // 顯示載入中
+    // 確保載入狀態顯示
     mask.style.display = "flex";
     tLoad.style.display = "block";
-
-    // ★ 載入中先隱藏管理員篩選區域
-    document.getElementById("adminFilterArea").style.display = "none";
     
     const url = `${REPORT_GAS_URL}?action=listAdminFull&days=30`;
     const res = await fetch(url);
@@ -556,7 +553,10 @@ async function loadAdminRecords() {
     if (json.success) {
       globalAdminRecords = json.records || [];
       
-      // 不馬上顯示篩選區域，等 loading 關掉後再顯示
+      // 確保篩選區域顯示
+      document.getElementById("adminFilterArea").style.display = "block";
+      
+      // 自動執行第一次篩選並渲染
       const filtered = filterAdminRecords();
       renderList(filtered);
     } else {
@@ -566,13 +566,8 @@ async function loadAdminRecords() {
     console.error("載入管理員資料失敗:", err);
     document.getElementById("listContainer").innerHTML = "管理員資料載入失敗";
   } finally {
-    // loading 結束
-    mask.style.display = "none";
-
-    // ★ 這裡才顯示篩選區（僅管理員 + admin 模式）
-    if (globalRole === "管理員" && viewMode === "admin") {
-      document.getElementById("adminFilterArea").style.display = "block";
-    }
+    // 無論成功失敗都要隱藏載入遮罩
+    document.getElementById("loadingMask").style.display = "none";
   }
 }
 
