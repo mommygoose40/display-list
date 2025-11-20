@@ -713,8 +713,9 @@ function debug(msg) {
       1. 初始化：登入 LIFF 並取得資料
   -------------------------------------------*/
   async function main() {
-  // 直接隱藏切換區域（保留顯示篩選區域）
-  document.getElementById("switchArea").style.display = "none";  // 保持顯示篩選區域
+
+  // 正常初始化（一定要跑，不能 skip）
+  document.getElementById("switchArea").style.display = "none";
 
   await liff.init({ liffId: "2007934728-jZkMLlPO" });
 
@@ -726,17 +727,8 @@ function debug(msg) {
   const profile = await liff.getProfile();
   globalNickname = profile.displayName;
 
-  // 直接顯示「載入中」，避免中間閃爍
-  const mask = document.getElementById("loadingMask");
-  mask.style.display = "flex";  // 顯示loading
-  const tLoad = document.getElementById("text-loading");
-  tLoad.style.display = "block";  // 顯示載入中
-
-  // 渲染完成後顯示資料區域
-  document.getElementById("listView").style.display = "none";  // 先隱藏資料區域，等資料加載完再顯示
-
-  // 確保資料加載完畢才顯示頁面
-  loadRecordList("3");  // 這裡載入「最近 3 天」的資料
+  // 第一次載入資料
+  loadUserInfo(globalNickname);
 }
 
 function openDetail(url) {
@@ -913,9 +905,14 @@ async function loadAdminRecords() {
   /* ------------------------------------------
       3. 從 GAS 取得回報記錄（未來串 API）
   -------------------------------------------*/
-  async function loadRecordList(days = "3") {
-  // 根據篩選天數來載入資料
-  const url = `${REPORT_GAS_URL}?action=listAdminFull&days=${days}`;
+  async function loadRecordList(mode = "self") {
+  let url = "";
+
+  if (mode === "self") {
+    url = `${REPORT_GAS_URL}?action=listMyReports&nickname=${globalNickname}`;
+  } else if (mode === "team") {
+    url = `${REPORT_GAS_URL}?action=listTeamReports&nickname=${globalNickname}`;
+  }
 
   let res = await fetch(url);
   let text = await res.text();
@@ -928,8 +925,15 @@ async function loadAdminRecords() {
 
   globalRecords = json.records || [];
 
-  // 資料處理完畢後，渲染並顯示資料
+  // ⭐ 渲染完成後才允許關閉 LoadingMask
   renderList(globalRecords);
+
+  if (shouldKeepMask) {
+    shouldKeepMask = false;
+    document.getElementById("loadingMask").style.display = "none";
+  }
+
+  updateSwitchUI();
 }
 
   /* ------------------------------------------
@@ -1029,15 +1033,6 @@ function renderList(records) {
   // 初始化時隱藏列表和 spinner，保持載入中遮罩
   container.style.display = "none";
   spinner.style.display = "none";
-
-  // 顯示沒有資料時的提示
-  if (records.length === 0) {
-    const noDataMessage = document.createElement("div");
-    noDataMessage.textContent = "無符合的記錄";
-    noDataMessage.style.textAlign = "center";
-    noDataMessage.style.marginTop = "20px";
-    container.appendChild(noDataMessage);
-  }
 
   // 管理員模式：確保篩選區域顯示
   if (globalRole === "管理員" && viewMode === "admin") {
@@ -1227,13 +1222,6 @@ function renderList(records) {
 
   debug("STEP3 完成：列表渲染成功");
 }
-
-// 避免頁面在初始載入時就進行不必要的閃爍或載入
-document.addEventListener("DOMContentLoaded", () => {
-  // 保證資料和 UI 加載完成後才顯示頁面，防止閃爍
-  document.getElementById("loadingMask").style.display = "none"; // 隱藏載入動畫
-  document.getElementById("listView").style.display = "block"; // 顯示列表區域
-});
 
 function saveListState() {
   // 取得所有展開的區塊
