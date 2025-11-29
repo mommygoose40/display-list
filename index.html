@@ -109,7 +109,7 @@
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.35);
-  display: flex;
+  display: none;
   flex-direction: column;
   justify-content: center;
   align-items: center;
@@ -233,6 +233,25 @@
   text-align: center;
   margin-left: 6px;
   flex-shrink: 0; /* ⭐ 不要被擠壓變形 */
+}
+
+.timeRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.timeRow .fakeSelectBtn {
+  height: 42px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+}
+
+.tilde {
+  font-size: 20px;
+  line-height: 1;
+  padding: 0 2px;
 }
 
 /* 黑色遮罩 */
@@ -361,7 +380,7 @@
   z-index: 9999;
 }
 
-.gray-btn, .red-btn {
+.gray-btn, .blue-btn {
   flex: 1;
   height: 48px;
   font-size: 20px;
@@ -374,8 +393,8 @@
   color: #333;
 }
 
-.red-btn {
-  background: #d9534f;
+.blue-btn {
+  background: #0b5ed7;
   color: #fff;
 }
 
@@ -387,17 +406,25 @@
 }
 
 #pageWrapper {
-  padding-bottom: 90px; /* 預留 footer 空間 */
+  padding-bottom: 0px; /* 預留 footer 空間 */
 }
 
 #detailView {
-  padding-bottom: 0 !important;
-  height: calc(100vh - 70px);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+
+  bottom: 70px;  /* ★ 同理 */
   overflow-y: auto;
 }
 
 #globalFooter {
-  box-sizing: border-box;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 70px;
 }
 
 html, body {
@@ -406,9 +433,76 @@ html, body {
 }
 
 #listView {
-  height: calc(100vh - 70px); /* 扣掉 footer 高度 */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+
+  bottom: 70px;  /* ★ 不用 calc，直接讓它撐滿到 footer 上方 */
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch; /* 讓手機滑動順 */
+  -webkit-overflow-scrolling: touch;
+}
+
+#listView {
+  padding: 0 16px 50px !important; /* 左右內距+底部留空 */
+  box-sizing: border-box;
+}
+
+.fakeSelectBtn {
+  height: 42px !important;
+  display: inline-flex;
+  align-items: center;
+}
+
+#globalFooter {
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+  box-sizing: border-box !important;
+}
+
+/* === 電腦版：只有 listView 顯示時才套用卡片模式 === */
+@media (min-width: 769px) {
+
+  /* 預設：先不要卡片 → 用滿版 */
+  body.desktop-card-mode {
+    background: #f1f1f1 !important;
+    display: flex !important;
+    justify-content: center !important;
+    padding: 40px 0 !important;
+  }
+
+  /* 只有在 desktop-card-mode 時，listView 才變卡片 */
+  body.desktop-card-mode #pageWrapper {
+    max-width: 800px !important;
+    width: 100%;
+    background: white;
+    border-radius: 12px;
+    padding: 20px 24px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    margin: 0 auto;
+  }
+
+  /* listView 的內框要解除強制 layout，才能變成卡片內容 */
+  body.desktop-card-mode #listView {
+    position: static !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  /* detailView 一律不要卡片，要滿版 → footer 才會顯示出來 */
+  #detailView {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* 電腦版允許 footer（因為你要求 iframe 一律要有 footer） */
+  #globalFooter {
+    display: flex !important;
+  }
 }
   </style>
 
@@ -421,8 +515,10 @@ html, body {
 
 <div id="listView" style="display:block;">
 
+
+    <!-- 這個 div 用來顯示所有的日誌 -->
 <!--
-    <div id="debug" style="white-space: pre-line; font-size:14px; color:#c00; margin-bottom:16px;"></div>
+  <div id="debugLog" style="position: fixed; bottom: 0; left: 0; width: 100%; background-color: rgba(0, 0, 0, 0.7); color: white; font-size: 14px; padding: 10px; overflow-y: auto; max-height: 200px;"></div>
 -->
 
 <div id="loadingMask">
@@ -568,15 +664,19 @@ html, body {
       <option value="23:59" selected>23:59</option>
     </select>
 
-    <button class="fakeSelectBtn" onclick="openDropdown('timeStart')">
-  <span id="timeStartText">00:00</span>
-  <span class="arrow">▾</span>
-</button>
-    ～
-    <button class="fakeSelectBtn" onclick="openDropdown('timeEnd')">
-  <span id="timeEndText">23:59</span>
-  <span class="arrow">▾</span>
-</button>
+    <div id="timeWrapper" class="timeRow">
+  <button class="fakeSelectBtn timeBtn" onclick="openDropdown('timeStart')">
+    <span id="timeStartText">00:00</span>
+    <span class="arrow">▾</span>
+  </button>
+
+  <span class="tilde">～</span>
+
+  <button class="fakeSelectBtn timeBtn" onclick="openDropdown('timeEnd')">
+    <span id="timeEndText">23:59</span>
+    <span class="arrow">▾</span>
+  </button>
+</div>
   </div>
 
   <!-- 類型 -->
@@ -668,13 +768,13 @@ html, body {
 
 <div id="globalFooter">
   <button class="gray-btn" onclick="backToList()">回上一頁</button>
-  <button class="red-btn" onclick="handleClosePage()">關閉頁面</button>
+  <button class="gray-btn" onclick="handleClosePage()">回主選單</button>
 </div>
 
 <script>
 
   const VOLUNTEER_API_URL = "https://script.google.com/macros/s/AKfycbxiGSG5hSMO6We-C6cyEJZLgf4Rnbjp-6w9Tmb0qfF9VM6JB4YGEMqj3QRfTzg7Czpc/exec"; 
-const REPORT_GAS_URL = "https://script.google.com/macros/s/AKfycbxOWIHS04mtcTRdJNvnWnGOwBnlGPwG3tQOU0qgN5feabS7hbRrIM4bU1_T8VrXaA1-8g/exec";
+const REPORT_GAS_URL = "https://script.google.com/macros/s/AKfycbxl3TC9aFxOZCm46KfTe5-sRsJxUKcdsaO1RqrjYniYJqWecoEdp6MvUoPNKwCnmZcTBw/exec";
 
 let globalAdminRecords = [];   // 管理員一次抓全部後存在這邊
 let adminViewDays = 3;        // 預設抓最近兩週，可改 30
@@ -685,6 +785,8 @@ let globalName = "";  // ★ 必須補這行
 let viewMode = "team";  // self = 看自己, team = 看大隊
 let shouldKeepMask = false;
 let restoredOnce = false;
+let isInitialLoad = true;
+let globalRecords = [];
 
 // === 防止回上一頁重新初始化（BFCache 支援） ===
 window.addEventListener("pageshow", function (event) {
@@ -694,182 +796,140 @@ window.addEventListener("pageshow", function (event) {
   }
 });
 
-// === 只在本頁第一次開啟時執行 main() ===
-if (!sessionStorage.getItem("initialized")) {
-  main();
-  sessionStorage.setItem("initialized", "1");
-} else {
-  console.log("已初始化過 → 不再執行 main()");
-}
+main();
 
 function debug(msg) {
   try {
-    const box = document.getElementById("debug");
-    if (box) box.textContent += msg + "\n";
-  } catch (e) {}
+    const box = document.getElementById("debugLog");
+    if (box) {
+      // 這裡添加新的日誌
+      box.textContent += msg + "\n";
+      box.scrollTop = box.scrollHeight;  // 滾動到最新的日誌位置
+    }
+    console.log(msg);  // 依然在控制台打印
+  } catch (e) {
+    console.error("Debug log error: ", e);
+  }
 }
 
   /* ------------------------------------------
       1. 初始化：登入 LIFF 並取得資料
   -------------------------------------------*/
-  async function main() {
+  function showLoading() {
+  document.getElementById("loadingMask").style.display = "flex";
 
-  // 正常初始化（一定要跑，不能 skip）
-  document.getElementById("switchArea").style.display = "none";
-
-  await liff.init({ liffId: "2007934728-jZkMLlPO" });
-
-  if (!liff.isLoggedIn()) {
-    liff.login();
-    return;
-  }
-
-  const profile = await liff.getProfile();
-  globalNickname = profile.displayName;
-
-  // 第一次載入資料
-  loadUserInfo(globalNickname);
+  document.getElementById("text-loading").style.display = "block";
+  document.getElementById("text-update").style.display = "none";
+  document.getElementById("text-init").style.display = "none";
+  document.getElementById("text-error").style.display = "none";
+  document.getElementById("text-error-format").style.display = "none";
+  document.getElementById("text-error-notfound").style.display = "none";
 }
 
-function openDetail(url) {
+async function main() {
+  showLoading();  // ★ 這裡顯示載入中...
 
-  // 切換畫面
-  document.getElementById("listView").style.display = "none";
-  document.getElementById("detailView").style.display = "block";
+  globalVid      = localStorage.getItem("vid") || "";
+globalName     = localStorage.getItem("name") || "";
+globalTeam     = localStorage.getItem("team") || "";
+globalRole     = localStorage.getItem("role") || "志工";
 
-  const iframe = document.getElementById("detailFrame");
-  iframe.src = url;
-
-  // 等 Display 的內容載入後，接管返回按鈕
-  iframe.onload = () => {
-    try {
-      const backBtn = iframe.contentDocument.querySelector("#backBtn");
-      if (backBtn) {
-        backBtn.onclick = () => window.parent.backToList();
-      }
-    } catch(e) {
-      console.warn("無法參訪 iframe（可能跨域）", e);
-    }
-  };
+if (!globalVid) {
+  debug("錯誤：localStorage 內沒有 vid，無法查詢資料");
 }
-
-function backToList() {
-  document.getElementById("detailView").style.display = "none";
-  document.getElementById("listView").style.display = "block";
-
-  // 回列表位置完全不變，不用你管
-}
-
-  /* ------------------------------------------
-      2. 讀取使用者權限 + 大隊等資訊
-  -------------------------------------------*/
-  let isInitialLoad = true;   // ★ 第一次載入
-  shouldKeepMask = false; // ★ 管理員初始化時，需要在 renderList() 才關掉 mask
-
-async function loadUserInfo(nickname) {
-  debug("STEP1: 開始取得志工資料，nickname=" + nickname);
-
-  const mask = document.getElementById("loadingMask");
-  const tLoad = document.getElementById("text-loading");
-  const tUpdate = document.getElementById("text-update");
-  const tInit = document.getElementById("text-init");
-
-  // 先全部隱藏
-  tLoad.style.display = "none";
-  tUpdate.style.display = "none";
-  tInit.style.display = "none";
-  mask.style.display = "none";
-
-  const cache = localStorage.getItem("userInfoCache");
-  const now = Date.now();
-  const expires = 10 * 1000;
-
-  let useCache = false;
-
-  /* ---------------------------
-      1. 判斷快取
-  --------------------------- */
-  if (cache) {
-    try {
-      const parsed = JSON.parse(cache);
-
-      if (now - parsed.timestamp < expires) {
-        useCache = true;
-
-        globalRole = parsed.role;
-        globalTeam = parsed.team;
-        globalName = parsed.name;
-
-        mask.style.display = "flex";
-        tLoad.style.display = "block";  // 顯示「載入中」
-      }
-    } catch (e) {
-      // cache 壞掉 → 當作沒快取
-    }
-  }
-
-  /* ---------------------------
-      2. 若沒快取 → 顯示初始化/更新
-  --------------------------- */
-  if (!useCache) {
-
-    mask.style.display = "flex";
-
-    if (!cache) tInit.style.display = "block";
-    else tUpdate.style.display = "block";
-
-    // ★★★ API 呼叫必須包 try/catch，避免卡死
-    try {
-      const url = `${VOLUNTEER_API_URL}?action=query&nickname=${nickname}`;
-      let res = await fetch(url);
-      let text = await res.text();
-
-      if (text.startsWith("callback")) {
-        text = text.replace(/^callback\(/, "").replace(/\);\s*$/, "");
-      }
-
-      const json = JSON.parse(text);
-
-      if (!json.success) throw new Error("API 無 success");
-
-      globalName = json.data.姓名;
-      globalTeam = json.data.大隊;
-      globalRole = json.data.權限 || "志工";
-
-      // 寫快取
-      localStorage.setItem("userInfoCache", JSON.stringify({
-        name: globalName,
-        team: globalTeam,
-        role: globalRole,
-        timestamp: Date.now()
-      }));
-
-    } catch (e) {
-      document.getElementById("text-error").style.display = "block";
-      return; // ★ 但 loadingMask 已經在畫面上
-    }
-  }
-
-  /* ---------------------------
-      3. 分權限 → 第一次只載入對的資料
-  --------------------------- */
 
   if (globalRole === "管理員") {
     viewMode = "admin";
-    shouldKeepMask = true;        // ★ renderList() 要負責關 mask
-    loadAdminRecords();
+    await loadAdminRecords();
     return;
   }
 
   if (globalRole === "大隊長") {
     viewMode = "team";
-    loadRecordList("team");
+    await loadRecordList("team");
     return;
   }
 
-  // 志工
   viewMode = "self";
-  loadRecordList("self");
+  await loadRecordList("self");
+}
+
+window.addEventListener("message", (e) => {
+  const footer = document.getElementById("globalFooter");
+  const iframe = document.getElementById("detailFrame");
+
+  if (e.data.action === "PHOTO_OPEN") {
+    footer.style.display = "none";
+    iframe.style.height = "100%";   // ★ 滿版
+  }
+
+  if (e.data.action === "PHOTO_CLOSE") {
+    footer.style.display = "flex";
+    iframe.style.height = "calc(100% - 70px)"; // ★ 恢復
+  }
+});
+
+function openDetail(url) {
+  const list = document.getElementById("listView");
+  const detail = document.getElementById("detailView");
+  const iframe = document.getElementById("detailFrame");
+  const footer = document.getElementById("globalFooter");
+
+  // ★ 離開卡片模式，恢復滿版
+  document.body.classList.remove("desktop-card-mode");
+
+  list.style.display = "none";
+  detail.style.display = "block";
+  iframe.src = url;
+
+  // ★ footer 一定要顯示
+  footer.style.display = "flex";
+
+  iframe.onload = () => {
+    try {
+      const doc = iframe.contentDocument;
+      const modal = doc.querySelector('#image-modal');
+      if (!modal) return;
+
+      const observer = new MutationObserver(() => {
+        // 照片開啟 → footer 隱藏
+        if (modal.style.display === "block") {
+          footer.style.display = "none";
+          iframe.style.height = "100%";
+        } else {
+          footer.style.display = "flex";
+          iframe.style.height = "calc(100% - 70px)";
+        }
+      });
+
+      observer.observe(modal, { attributes: true, attributeFilter: ["style"] });
+
+    } catch {}
+  };
+}
+
+// ★★★ 統一照片頁偵測邏輯
+function isPhotoPage(url) {
+  return /photo|image|img|picture|gallery/i.test(url);
+}
+
+function backToList() {
+  const detail = document.getElementById("detailView");
+  const list = document.getElementById("listView");
+
+  if (detail.style.display === "block") {
+    detail.style.display = "none";
+    list.style.display = "block";
+
+    // ★ 回到列表 → 恢復卡片模式（電腦）
+    if (window.innerWidth >= 769) {
+      document.body.classList.add("desktop-card-mode");
+    }
+
+    return;
+  }
+
+  window.location.href = "/home";
 }
 
 async function loadAdminRecords() {
@@ -906,27 +966,31 @@ async function loadAdminRecords() {
       3. 從 GAS 取得回報記錄（未來串 API）
   -------------------------------------------*/
   async function loadRecordList(mode = "self") {
+  if (!globalVid) {
+    debug("錯誤：沒有 vid 無法查詢");
+    document.getElementById("loadingMask").style.display = "none";
+    return;
+  }
+
   let url = "";
 
   if (mode === "self") {
-    url = `${REPORT_GAS_URL}?action=listMyReports&nickname=${globalNickname}`;
+    url = `${REPORT_GAS_URL}?action=listMyReports&vid=${encodeURIComponent(globalVid)}`;
   } else if (mode === "team") {
-    url = `${REPORT_GAS_URL}?action=listTeamReports&nickname=${globalNickname}`;
+    url = `${REPORT_GAS_URL}?action=listTeamReports&team=${encodeURIComponent(globalTeam)}`;
   }
 
-  let res = await fetch(url);
-  let text = await res.text();
+  debug("發送 API 請求，URL: " + url); // 打印 API 請求的 URL
 
-  if (text.startsWith("callback")) {
-    text = text.replace(/^callback\(/, "").replace(/\);$/, "");
-  }
-
+  const res = await fetch(url);
+  const text = await res.text();
   const json = JSON.parse(text);
 
-  globalRecords = json.records || [];
+  debug("返回的資料: " + JSON.stringify(json)); // 打印 API 返回的資料
 
-  // ⭐ 渲染完成後才允許關閉 LoadingMask
+  globalRecords = json.records || [];
   renderList(globalRecords);
+}
 
   if (shouldKeepMask) {
     shouldKeepMask = false;
@@ -934,7 +998,6 @@ async function loadAdminRecords() {
   }
 
   updateSwitchUI();
-}
 
   /* ------------------------------------------
       4. 渲染「年度 → 月份 → 日期 → 紀錄」
@@ -1071,13 +1134,9 @@ function renderList(records) {
 
   let finalRecords = records;
 
-  if (viewMode === "self") {
-    finalRecords = records.filter(r => {
-      return (r.回報者 || "").trim() === globalName;
-    });
-  }
-
   globalRecords = records;
+
+  debug("STEP3: globalTeam = " + globalTeam);
 
   debug("STEP3: 進入 renderList，顯示筆數=" + finalRecords.length);
 
@@ -1212,6 +1271,13 @@ function renderList(records) {
     }
   }, 50); // 稍微延遲確保 DOM 完全渲染
 
+  isInitialLoad = false;
+
+  // ★ 電腦版：listView 渲染完成 → 啟用卡片模式
+if (window.innerWidth >= 769) {
+  document.body.classList.add("desktop-card-mode");
+}
+
   debug("STEP3 完成：列表渲染成功");
 }
 
@@ -1235,7 +1301,7 @@ function saveListState() {
 }
 
 function restoreListState() {
-  const cache = localStorage.getItem("cleanRestore");
+  const cache = localStorage.getItem("cleanListState");
   if (!cache) return;
 
   const state = JSON.parse(cache);
@@ -1599,8 +1665,6 @@ function unlockBodyScroll() {
   window.scrollTo(0, scrollTopCache);
 }
 
-  main();
-
   /*
 alert("adminTeamSelect:", document.getElementById("adminTeamSelect"));
 alert("viewFullRecords:", document.getElementById("viewFullRecords"));
@@ -1608,12 +1672,9 @@ alert("fullDropdownMask:", document.getElementById("fullDropdownMask"));
 */
 
 function handleClosePage() {
-  if (window.liff && window.liff.isInClient()) {
-    liff.closeWindow(); // LINE 內 → 正確關閉
-  } else {
-    window.location.href = "about:blank"; // 外部瀏覽器 → 強制離開
-  }
+  window.location.href = "/home";  // 替換成你的主選單頁
 }
+
 </script>
 
 </body>
